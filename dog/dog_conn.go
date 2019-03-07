@@ -38,6 +38,7 @@ type Conn struct {
 	Opts       uint64
 
 	// Internal variables
+	time   time.Time
 	c      *xmpp.Conn
 	rooms  map[string]*Room
 	rl     *sync.Mutex
@@ -56,6 +57,7 @@ func New() *Conn {
 	cn.hl = new(sync.Mutex)
 
 	cn.On(UserJoined, cn.introduction)
+	cn.On(RoomJoined, cn.introduction)
 
 	return cn
 }
@@ -90,6 +92,8 @@ func (c *Conn) Run() error {
 	if c.DB == nil {
 		c.DB = new(sync.Map)
 	}
+
+	c.time = time.Now()
 
 	c.initKeys()
 
@@ -182,28 +186,28 @@ func (c *Conn) processEvent() error {
 			return err
 		}
 
-		go func() {
-			nick := jid.Node
+		nick := jid.Node
 
-			rm := c.GetRoom(jid.Local)
-			if rm != nil {
-				if jid.Host == c.Conference {
-					if jid.Node == rm.MyName {
-						if rm.joinedEvent == false {
-							rm.joinedEvent = true
-							go func() {
-								time.Sleep(200 * time.Millisecond)
-								rm.emit(Event{
-									Type: RoomJoined,
-								})
-							}()
-						}
+		rm := c.GetRoom(jid.Local)
+		if rm != nil {
+			if jid.Host == c.Conference {
+				if jid.Node == rm.MyName {
+					if rm.joinedEvent == false {
+						rm.joinedEvent = true
+						go func() {
+							time.Sleep(2000 * time.Millisecond)
+							rm.emit(Event{
+								Type: RoomJoined,
+							})
+						}()
 					}
 				}
 			}
+		}
 
-			switch m.Type {
-			case "unavailable":
+		switch m.Type {
+		case "unavailable":
+			go func() {
 				rm := c.GetRoom(jid.Local)
 				rm.ml.Lock()
 				delete(rm.Members, nick)
@@ -214,8 +218,8 @@ func (c *Conn) processEvent() error {
 					Room: jid.Local,
 					User: nick,
 				})
-			}
-		}()
+			}()
+		}
 	}
 
 	return nil
@@ -273,14 +277,16 @@ func (c *Conn) processMessage(msg xmpp.Message) {
 					nil,
 				}
 				rm.ml.Unlock()
-				go func() {
-					time.Sleep(200 * time.Millisecond)
-					c.emit(Event{
-						Type: UserJoined,
-						User: nick,
-						Room: jid.Local,
-					})
-				}()
+				if time.Since(c.time) > 4000*time.Millisecond {
+					go func() {
+						time.Sleep(200 * time.Millisecond)
+						c.emit(Event{
+							Type: UserJoined,
+							User: nick,
+							Room: jid.Local,
+						})
+					}()
+				}
 			}
 
 			if len(data) > 0 {
@@ -465,18 +471,20 @@ func (c *Conn) joinMuc(room, nick string) {
 	}
 	c.storeJSON("rooms", ms)
 
+	r.bexTx = make(chan []BEX)
+	r.bexAddTout = make(chan float64)
+	go r.bexGroupTransmitter()
+
 	c.c.JoinMUC(r.Name, c.Conference, r.MyName)
 
 	go func(_room *Room) {
 		time.Sleep(200 * time.Millisecond)
 		_room.Mp.RequestPublicKey("")
 		_room.Mp.SendPublicKey("")
-		yo.L(4).Println("Initialized")
 	}(r)
 }
 
 func (c *Conn) DM(room, user, message string) {
-	yo.Ok("Sending", room, user, message)
 	c.GetRoom(room).DM(user, message)
 }
 

@@ -502,6 +502,8 @@ func ValidColor(str string) bool {
 
 func (c *Conn) introduction(event Event) {
 	if c.opt(BEXDisabled) == false {
+		yo.Ok("BEX transmission")
+
 		var intro []BEX
 		var color string
 		if color = c.loadString("color"); color == "" {

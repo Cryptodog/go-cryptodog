@@ -2,9 +2,9 @@
 
 # go-cryptodog
 
-![license](https://img.shields.io/badge/License-MIT-blue.svg)
+[![license](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[![](https://godoc.org/github.com/Cryptodog/go-cryptodog?status.svg)](https://godoc.org/github.com/Cryptodog/go-cryptodog)
+[![](https://godoc.org/github.com/Cryptodog/go-cryptodog?status.svg)](https://godoc.org/github.com/Cryptodog/go-cryptodog/dog)
 
 go-cryptodog is a general-purpose Golang API for writing programs that interact with [Cryptodog](https://crypto.dog).
 
@@ -37,6 +37,11 @@ func main() {
   d.On(dog.Connected, func(e dog.Event) {
     fmt.Println("Connected!")
     d.JoinRoom("testingroom", "DemoBot")
+  })
+
+  d.On(dog.NicknameInUse, func(e dog.Event) {
+    fmt.Println("Nickname is in use.")
+    d.Disconnect()
   })
 
   // If this happens, the bot will automatically try to reconnect.

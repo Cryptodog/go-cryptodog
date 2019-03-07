@@ -30,6 +30,7 @@ const (
 	WebRTCIceCandidate
 )
 
+// Event describes
 type Event struct {
 	Type    EventType
 	Private bool
@@ -39,6 +40,7 @@ type Event struct {
 	File    *File
 }
 
+// On registers a function that will handle an Event.
 func (c *Conn) On(_type EventType, handler EventHandler) {
 	c.h[_type] = append(c.h[_type], handler)
 }

@@ -140,6 +140,7 @@ func Dial(o Opts) (*Conn, error) {
 		Subprotocol: "xmpp",
 		Origin:      "https://cryptodog.github.io/",
 		UserAgent:   "Mozilla/5.0 (Windows NT 6.1; rv:31.0) Gecko/20100101 Firefox/31.0",
+		Socks5:      o.Proxy,
 	})
 
 	if err != nil {
@@ -187,6 +188,7 @@ func (c *Conn) send(stanza string) error {
 	}
 	err := c.socket.Send([]byte(stanza))
 	if err != nil {
+		yo.Warn(err)
 		return err
 	}
 
