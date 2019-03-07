@@ -49,3 +49,7 @@ func (d *Disk_DB) Load(key interface{}) (interface{}, bool) {
 func (d *Disk_DB) Delete(key interface{}) {
 	d.base.Concat(key.(string)).Remove()
 }
+
+func FolderStore(folderName string) *Disk_DB {
+	return Disk(etc.LocalDirectory().Concat(folderName).Render())
+}
