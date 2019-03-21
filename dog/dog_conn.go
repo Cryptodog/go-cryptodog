@@ -280,7 +280,7 @@ func (c *Conn) processMessage(msg xmpp.Message) {
 				rm.ml.Unlock()
 				if time.Since(c.time) > 4000*time.Millisecond {
 					go func() {
-						time.Sleep(200 * time.Millisecond)
+						time.Sleep(800 * time.Millisecond)
 						c.emit(Event{
 							Type: UserJoined,
 							User: nick,

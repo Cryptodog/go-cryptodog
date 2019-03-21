@@ -238,6 +238,7 @@ func New() *Parser {
 	p := new(Parser)
 	p.cl = new(sync.Mutex)
 	p.cmds = make(map[string]*Handler)
+	p.rgx = make(map[string]*Handler)
 	p.Prefix = '.'
 	p.MaxLen = 2048
 	p.MaxSpamPerMinute = 60
