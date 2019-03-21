@@ -322,6 +322,10 @@ func (r *Room) handleGroupBEXPacket(from string, data []byte) {
 				User: from,
 				Body: bx.Target,
 			})
+		case FLAG_ME_AS_BOT:
+			if f := r.GetMember(from); f != nil {
+				f.Bot = true
+			}
 		}
 	}
 }

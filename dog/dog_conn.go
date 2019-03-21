@@ -271,6 +271,7 @@ func (c *Conn) processMessage(msg xmpp.Message) {
 			if newUser != "" {
 				rm.ml.Lock()
 				rm.Members[nick] = &Member{
+					false,
 					rm,
 					nick,
 					nil,

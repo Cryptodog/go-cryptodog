@@ -29,6 +29,7 @@ type Room struct {
 }
 
 type Member struct {
+	Bot      bool
 	r        *Room
 	nickname string
 	otr      *otr3.Conversation

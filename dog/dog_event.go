@@ -17,7 +17,7 @@ const (
 	SMPQuestion
 	SMPAnswer
 	SMPSuccess
-	SMPFailure
+	SMPFailure	
 	Composing
 	Paused
 	ColorModify

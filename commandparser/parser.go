@@ -3,6 +3,7 @@ package commandparser
 import (
 	"html/template"
 	"io"
+	"regexp"
 	"sort"
 	"strconv"
 	"sync"
@@ -26,12 +27,14 @@ type Parser struct {
 	cl                *sync.Mutex
 	AntiSpam          *sync.Map
 	lastCommandString string
+	rgx               map[string]*Handler
 }
 
 type C struct {
 	Room string
 	From string
 	Name string
+	Src  string
 	Args []string
 }
 
@@ -71,6 +74,16 @@ func (p *Parser) On(cmd, description string, cb HandlerFunc) {
 	p.cl.Unlock()
 }
 
+func (p *Parser) Rgx(cmd, description string, cb HandlerFunc) {
+	p.cl.Lock()
+	regexp.MustCompile(cmd)
+	p.rgx[cmd] = &Handler{
+		cb,
+		description,
+	}
+	p.cl.Unlock()
+}
+
 type SpamData struct {
 	LastCommand time.Time
 	SpamScore   int64
@@ -78,6 +91,7 @@ type SpamData struct {
 
 func (p *Parser) Parse(room, from, data string) {
 	invocation := C{}
+	invocation.Src = data
 	invocation.Room = room
 	invocation.From = from
 
@@ -205,6 +219,18 @@ func (p *Parser) Parse(room, from, data string) {
 		if fn != nil {
 			fn.Fn(invocation)
 		}
+	} else {
+		p.cl.Lock()
+		for k, v := range p.rgx {
+			rgs := regexp.MustCompile(k).FindAllString(data, -1)
+			if len(rgs) > 0 {
+				inv := invocation
+				inv.Args = rgs
+				go v.Fn(inv)
+				break
+			}
+		}
+		p.cl.Unlock()
 	}
 }
 

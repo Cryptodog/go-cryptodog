@@ -3,8 +3,7 @@
 # go-cryptodog
 
 [![license](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-
-[![](https://godoc.org/github.com/Cryptodog/go-cryptodog?status.svg)](https://godoc.org/github.com/Cryptodog/go-cryptodog/dog)
+[![](https://godoc.org/github.com/Cryptodog/go-cryptodog?status.svg)](https://godoc.org/github.com/Cryptodog/go-cryptodog)
 
 go-cryptodog is a general-purpose Golang API for writing programs that interact with [Cryptodog](https://crypto.dog).
 
