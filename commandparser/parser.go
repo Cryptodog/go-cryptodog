@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/superp00t/etc"
+	"github.com/superp00t/etc/yo"
 )
 
 type HandlerFunc func(C)
@@ -20,14 +21,15 @@ type Handler struct {
 }
 
 type Parser struct {
-	Prefix            rune
-	MaxLen            int64
-	MaxSpamPerMinute  int64
-	cmds              map[string]*Handler
-	cl                *sync.Mutex
-	AntiSpam          *sync.Map
-	lastCommandString string
-	rgx               map[string]*Handler
+	Prefix                 rune
+	MaxLen                 int64
+	MaxSpamPerMinute       int64
+	cmds                   map[string]*Handler
+	cl                     *sync.Mutex
+	AntiSpam               *sync.Map
+	lastCommandString      string
+	commandSpamAccumulator int64
+	rgx                    map[string]*Handler
 }
 
 type C struct {
@@ -63,6 +65,15 @@ func (c C) Float64(index int) float64 {
 
 	f, _ := strconv.ParseFloat(c.Args[index], 64)
 	return f
+}
+
+func (p *Parser) AddScore(room, user string, value int64) {
+	usID := user + "@" + room
+	spa, ok := p.AntiSpam.Load(usID)
+	if ok {
+		spm := spa.(*SpamData)
+		spm.SpamScore += value
+	}
 }
 
 func (p *Parser) On(cmd, description string, cb HandlerFunc) {
@@ -129,12 +140,23 @@ func (p *Parser) Parse(room, from, data string) {
 
 		spa.LastCommand = time.Now()
 
-		multiplier := 1
+		multiplier := int64(1)
 		if p.lastCommandString == data {
 			multiplier = 2
+			p.commandSpamAccumulator *= 4
+			multiplier += p.commandSpamAccumulator
+
+			if data == string(p.Prefix) {
+				multiplier *= 45
+			}
+		} else {
+			p.commandSpamAccumulator = 2
 		}
 
-		spa.SpamScore += 10 * int64(multiplier)
+		p.lastCommandString = data
+
+		spa.SpamScore += 3 * int64(multiplier)
+		yo.Ok(from, "new score", spa.SpamScore)
 	}
 
 	prs := etc.FromString(data)
@@ -241,14 +263,19 @@ func New() *Parser {
 	p.rgx = make(map[string]*Handler)
 	p.Prefix = '.'
 	p.MaxLen = 2048
-	p.MaxSpamPerMinute = 60
+	p.MaxSpamPerMinute = 512
 	p.AntiSpam = new(sync.Map)
+	p.commandSpamAccumulator = 2
 	return p
 }
 
 func (p *Parser) Help() HelpCommands {
 	hc := HelpCommands{}
 	for k, v := range p.cmds {
+		if v.Description == "" {
+			continue
+		}
+
 		hc.Commands = append(hc.Commands, HelpCommand{
 			Command:     string([]rune{p.Prefix}) + k,
 			Description: v.Description,

@@ -167,13 +167,9 @@ func Dial(o Opts) (*Conn, error) {
 	cli.recv()
 	cli.recv()
 	cli.send(BindStanza)
-	var i IQ
-	i.XMLName = xml.Name{Local: "iq", Space: "jabber:client"}
+
 	str, _ := cli.recv()
-	err = xml.Unmarshal([]byte(str), &i)
-	if err != nil {
-		return nil, err
-	}
+	i, _ := ParseIQ(str)
 
 	cli.JID = i.Bind.JID
 	cli.send(SessStanza)
@@ -241,9 +237,11 @@ rcv:
 	}
 
 	if strings.HasPrefix(str, "<presence") {
-		var pres Presence
-		pres.Presence = xml.Name{Local: "presence", Space: "jabber:client"}
-		xml.Unmarshal([]byte(str), &pres)
+		pres, err := ParsePresence(str)
+		if err != nil {
+			return nil, err
+		}
+
 		if pres.Type == "error" {
 			if pres.Error.Code == 409 {
 				yo.L(4).Warn(str)
@@ -256,9 +254,11 @@ rcv:
 	}
 
 	if strings.HasPrefix(str, "<message") {
-		var msg Message
-		msg.Message = xml.Name{Local: "message", Space: "jabber:client"}
-		xml.Unmarshal([]byte(str), &msg)
+		msg, err := ParseMessage(str)
+		if err != nil {
+			return nil, err
+		}
+
 		if msg.Type == "error" {
 			if msg.Error.Text == "Traffic rate limit is exceeded" {
 				return "", RateLimited

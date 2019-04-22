@@ -15,10 +15,11 @@ import (
 )
 
 type Room struct {
-	Name    string
-	MyName  string
-	Mp      *multiparty.Me
-	Members map[string]*Member
+	Name             string
+	MyName           string
+	Mp               *multiparty.Me
+	Members          map[string]*Member
+	ModerationTables map[string][]string
 
 	ml          *sync.Mutex
 	killed      bool
@@ -75,6 +76,16 @@ func (r *Room) Group(b []byte) {
 
 func (r *Room) DM(user, data string) {
 	r.GetMember(user).DM(data)
+}
+
+func (r *Room) IsMod(user string) bool {
+	for _, v := range r.c.GetMods() {
+		if v == r.GroupFingerprint(user) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (r *Room) GetMember(s string) *Member {

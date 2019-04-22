@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"net/http"
 	"regexp"
-	"time"
 
 	"github.com/superp00t/etc"
 	"github.com/superp00t/etc/yo"
@@ -57,20 +56,21 @@ const (
 )
 
 type BEX struct {
-	Header               BEXHeader
-	Color                string
-	Status               string
-	File                 *File
-	MessageType, Message string
-	SDPType              string
-	SDPData              string
-	ICECandidate         string
-	SDPMLineIndex        uint64
-	SDPMid               string
-	Target               string
-	Level                uint64
-	TableKey             string
-	Table                []string
+	Header        BEXHeader
+	Color         string   `json:"color,omitempty"`
+	Status        string   `json:"color,omitempty"`
+	File          *File    `json:"file,omitempty"`
+	MessageType   string   `json:"messageType,omitempty"`
+	Message       string   `json:"message,omitempty"`
+	SDPType       string   `json:"sdpType,omitempty"`
+	SDPData       string   `json:"sdpData,omitempty"`
+	ICECandidate  string   `json:"iceCandidate,omitempty"`
+	SDPMLineIndex uint64   `json:"sdpMLineIndex,omitempty"`
+	SDPMid        string   `json:"sdpMid,omitempty"`
+	Target        string   `json:"target,omitempty"`
+	Level         uint64   `json:"level,omitempty"`
+	TableKey      string   `json:"tableKey,omitempty"`
+	Table         []string `json:"table,omitempty"`
 }
 
 func (b BEXHeader) String() string {
@@ -257,6 +257,9 @@ func (r *Room) handleGroupBEXPacket(from string, data []byte) {
 		return
 	}
 
+	j, _ := json.Marshal(b)
+	yo.Warn(string(j))
+
 	for _, bx := range b {
 		switch bx.Header {
 		case FILE_ATTACHMENT:
@@ -326,8 +329,50 @@ func (r *Room) handleGroupBEXPacket(from string, data []byte) {
 			if f := r.GetMember(from); f != nil {
 				f.Bot = true
 			}
+		case SET_MODERATION_TABLE:
+			if r.IsMod(from) {
+				r.SetModerationTable(bx.TableKey, bx.Table)
+			}
 		}
 	}
+}
+
+func (r *Room) SetModerationTable(tk string, tv []string) {
+	r.ModerationTables[tk] = tv
+	switch tk {
+	case "keys":
+		for _, v := range tv {
+			names := r.Mp.NamesByFingerprint(v)
+			for _, n := range names {
+				r.Mp.BlacklistUser(n)
+			}
+		}
+	case "nicknames":
+		for _, v := range r.Mp.SortedNames() {
+			for _, gx := range tv {
+				if m, _ := regexp.MatchString("(?i)"+gx, v); m {
+					r.Mp.BlacklistUser(v)
+				}
+			}
+		}
+	}
+}
+
+func (r *Room) IsBlocked(user string) bool {
+	for _, v := range r.ModerationTables["nicknames"] {
+		if m, _ := regexp.MatchString("(?i)"+v, user); m {
+			return true
+		}
+	}
+
+	fp := r.GroupFingerprint(user)
+	for _, v := range r.ModerationTables["keys"] {
+		if fp == v {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (r *Room) handlePrivateBEXPacket(from string, data []byte) {
@@ -362,64 +407,79 @@ func (r *Room) handlePrivateBEXPacket(from string, data []byte) {
 }
 
 func (r *Room) bexGroupTransmitter() {
-	var tmp []BEX
-	for {
-		if r.killed {
-			return
-		}
+	// var tmp []BEX
+	// for {
+	// 	if r.killed {
+	// 		return
+	// 	}
 
-		var tout = float64(100)
+	// 	var tout = float64(100)
 
-		select {
-		case <-time.After(time.Duration(tout) * time.Millisecond):
-			if len(tmp) == 0 {
-				if tout > 0 {
-					// AIMD
-					tout *= .75
-				}
-				continue
-			}
-			if len(tmp) > 2 {
-				for x := 0; x < len(tmp)/2; x++ {
-					low := x * 2
-					high := (x + 1) * 2
+	// 	select {
+	// 	case <-time.After(time.Duration(tout) * time.Millisecond):
+	// 		if len(tmp) == 0 {
+	// 			if tout > 0 {
+	// 				// AIMD
+	// 				tout *= .75
+	// 			}
+	// 			continue
+	// 		}
+	// 		if len(tmp) > 2 {
+	// 			for len(tmp) > 0 {
+	// 				high := len(tmp)
+	// 				if high > 4 {
+	// 					high = 4
+	// 				}
 
-					if high > len(tmp) {
-						high = len(tmp)
-					}
+	// 				low := 0
 
-					yo.Ok("Sending range ", low, "-", "high")
+	// 				segment := tmp[low:high]
+	// 				d := EncodeBEX(segment)
+	// 				r.Group(d)
 
-					slice := EncodeBEX(tmp[low:high])
-					r.Group(slice)
+	// 				tmp = tmp[high:]
+	// 				time.Sleep()
+	// 			}
 
-					z := time.Millisecond * time.Duration(float64(len(slice))*1.2)
-
-					yo.Okf("Sleeping for %+v (%d/%d)", z, x, (len(tmp) / 3))
-					time.Sleep(z)
-				}
-
-				tmp = []BEX{}
-			} else {
-				d := EncodeBEX(tmp)
-				r.Group(d)
-				tmp = []BEX{}
-			}
-			if tout < 2000 {
-				tout += 900
-			}
-		case t := <-r.bexAddTout:
-			tout += t
-		case t := <-r.bexTx:
-			tmp = append(tmp, t...)
-		}
-	}
+	// 			tmp = []BEX{}
+	// 		} else {
+	// 			d := EncodeBEX(tmp)
+	// 			r.Group(d)
+	// 			tmp = []BEX{}
+	// 		}
+	// 		if tout < 2000 {
+	// 			tout += 900
+	// 		}
+	// 	case t := <-r.bexAddTout:
+	// 		tout += t
+	// 	case t := <-r.bexTx:
+	// 		tmp = append(tmp, t...)
+	// 	}
+	// }
 }
 
 func (r *Room) SendBEXGroup(b []BEX) {
-	go func(b []BEX) {
-		r.bexTx <- b
-	}(b)
+	// tmp := b
+	// for len(tmp) > 0 {
+	// 	high := len(tmp)
+	// 	if high > 4 {
+	// 		high = 4
+	// 	}
+
+	// 	low := 0
+
+	// 	segment := tmp[low:high]
+	// 	yo.Warn("Sending seg")
+	// 	yo.Spew(segment)
+	// 	d := EncodeBEX(segment)
+	// 	r.Group(d)
+
+	// 	tmp = tmp[high:]
+	// 	time.Sleep(100 * time.Millisecond)
+	// }
+
+	d := EncodeBEX(b)
+	r.Group(d)
 }
 
 func (r *Room) SendBEXPrivate(nickname string, b []BEX) {

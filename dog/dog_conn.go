@@ -225,6 +225,16 @@ func (c *Conn) processEvent() error {
 	return nil
 }
 
+func (c *Conn) SetMods(s []string) {
+	c.storeJSON("mods", s)
+}
+
+func (c *Conn) GetMods() []string {
+	var s []string
+	c.loadJSON("mods", &s)
+	return s
+}
+
 func (c *Conn) processMessage(msg xmpp.Message) {
 	jid, err := xmpp.ParseJID(msg.From)
 	if err != nil {
@@ -261,6 +271,10 @@ func (c *Conn) processMessage(msg xmpp.Message) {
 				Type: Paused,
 				User: nick,
 			})
+			return
+		}
+
+		if rm.IsBlocked(nick) {
 			return
 		}
 
@@ -458,6 +472,7 @@ func (c *Conn) JoinRoom(room, nick string) {
 
 func (c *Conn) joinMuc(room, nick string) {
 	r := new(Room)
+	r.ModerationTables = make(map[string][]string)
 	r.Name = room
 	r.MyName = nick
 	r.Mp, _ = multiparty.NewMe(nick, c.loadString("mp"))

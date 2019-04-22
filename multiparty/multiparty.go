@@ -513,6 +513,12 @@ func (me *Me) SendMessage(message []byte) {
 	me.lock.Unlock()
 }
 
+func (me *Me) ClearBlacklist() {
+	me.keyLock.Lock()
+	me.blacklist = make(map[string]bool)
+	me.keyLock.Unlock()
+}
+
 func (me *Me) NamesByFingerprint(fp string) []string {
 	var names []string
 	me.lock.Lock()

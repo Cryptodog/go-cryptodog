@@ -2,19 +2,9 @@ package main
 
 import (
 	"fmt"
-	"reflect"
-	"time"
 
 	"github.com/Cryptodog/go-cryptodog/dog"
 )
-
-func ReverseSlice(s interface{}) {
-	size := reflect.ValueOf(s).Len()
-	swap := reflect.Swapper(s)
-	for i, j := 0, size-1; i < j; i, j = i+1, j-1 {
-		swap(i, j)
-	}
-}
 
 func main() {
 	d := dog.New()
@@ -30,27 +20,16 @@ func main() {
 	// Alternatively:
 	// d.DB = dog.Disk("/full/path/")
 
+	// Want to connect via Tor/Tor Browser's process? (Note: won't work when compiled to webassembly.)
 	// d.Proxy = "127.0.0.1:9150"
 
 	d.On(dog.Connected, func(e dog.Event) {
 		fmt.Println("Connected!")
-		d.JoinRoom("lobby", "DemoBot")
+		d.JoinRoom("elysium", "DemoBot")
 	})
 
 	d.On(dog.RoomJoined, func(e dog.Event) {
 		fmt.Println("Joined room", e.Room)
-		inject := dog.EncodeBEX([]dog.BEX{
-			{Header: dog.FLAG_ME_AS_BOT, Color: "ff69b4"},
-		})
-
-		fmt.Println("Injecting bex...")
-
-		ReverseSlice(inject)
-
-		d.Group(e.Room, inject)
-
-		time.Sleep(500 * time.Millisecond)
-		d.GM(e.Room, "reverse that")
 	})
 
 	d.On(dog.NicknameInUse, func(e dog.Event) {

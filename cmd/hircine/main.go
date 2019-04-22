@@ -151,6 +151,9 @@ func (c *conn) joinRoom(s []string) {
 		c.cd = dog.New()
 		c.cd.Opts = dog.DMDisabled | dog.Human
 		c.cd.DB = dog.Disk(yo.StringG("s"))
+		c.cd.SetMods([]string{
+			"94D6D86FB4F2B2EE7AC2A639ABFBBC390113DD0D",
+		})
 		c.cd.DB.Delete("rooms")
 
 		c.cd.On(dog.Connected, func(e dog.Event) {
