@@ -61,7 +61,7 @@ func main() {
 			d.GMf(event.Room, "Hello, %s! How are you today?", event.User)
 		}
 
-		if event.Body == "please die" {
+		if event.Body == "begone" {
 			d.GM(event.Room, "sure thing!")
 
 			// Causes d.Run() to return nil (graceful exit)

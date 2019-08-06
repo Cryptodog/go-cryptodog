@@ -50,6 +50,7 @@ func (c *Conn) GetRoom(name string) *Room {
 
 func (c *Conn) GM(room string, body string) {
 	if !utf8.ValidString(body) {
+		yo.Warn("invalid utf-8 string!")
 		return
 	}
 
@@ -63,6 +64,8 @@ func (c *Conn) GMf(room string, format string, args ...interface{}) {
 func (c *Conn) Group(room string, b []byte) {
 	if r := c.GetRoom(room); r != nil {
 		r.Group(b)
+	} else {
+		yo.Warn("Group", room, "doesn't exist!")
 	}
 }
 
@@ -100,6 +103,10 @@ func (r *Room) GetMember(s string) *Member {
 
 func (m *Member) DM(data string) {
 	if m == nil {
+		return
+	}
+
+	if m.r.c.opt(DMDisabled) {
 		return
 	}
 
@@ -220,7 +227,7 @@ func (m *Member) Answer(data string) {
 		ts, err := m.otr.ProvideAuthenticationSecret([]byte(pdata))
 		if err == nil {
 			for _, v := range ts {
-				m.direct(string(v))
+				m.Raw(string(v))
 			}
 		}
 	}
@@ -267,7 +274,7 @@ func (m *Member) Ask(question, answer string) {
 		ts, err := m.otr.StartAuthenticate(question, []byte(ans))
 		if err == nil {
 			for _, v := range ts {
-				m.direct(string(v))
+				m.Raw(string(v))
 			}
 		} else {
 			yo.Warn(err)
@@ -283,7 +290,7 @@ func (m *Member) Ask(question, answer string) {
 		msg, err := m.otr.Send(otr3.ValidMessage{})
 		if err == nil {
 			for _, v := range msg {
-				m.direct(string(v))
+				m.Raw(string(v))
 			}
 		} else {
 			yo.Warn(err)
@@ -294,8 +301,12 @@ func (m *Member) Ask(question, answer string) {
 	}
 }
 
-func (m *Member) direct(str string) {
-	m.r.c.c.SendMessage(
+func (m *Member) Raw(str string) {
+	if m == nil {
+		return
+	}
+
+	if err := m.r.c.c.SendMessage(
 		xmpp.JID{
 			Local: m.r.Name,
 			Host:  m.r.c.Conference,
@@ -303,7 +314,9 @@ func (m *Member) direct(str string) {
 		}.String(),
 		"chat",
 		str,
-	)
+	); err != nil {
+
+	}
 }
 
 // Sends group composing message via Binary Extensions.

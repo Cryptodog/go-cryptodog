@@ -17,7 +17,7 @@ const (
 	SMPQuestion
 	SMPAnswer
 	SMPSuccess
-	SMPFailure	
+	SMPFailure
 	Composing
 	Paused
 	ColorModify
@@ -28,6 +28,7 @@ const (
 	WebRTCOffer
 	WebRTCAnswer
 	WebRTCIceCandidate
+	InvalidGroupMessage
 )
 
 // Event describes

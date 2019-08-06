@@ -285,12 +285,12 @@ rcv:
 	return nil, fmt.Errorf("Unknown thing %s", str)
 }
 
-func (c *Conn) SendMessage(jid, typeof, body string) {
+func (c *Conn) SendMessage(jid, typeof, body string) error {
 	if c == nil {
-		return
+		return fmt.Errorf("xmpp: conn is nil")
 	}
 
-	c.send(Stanza{
+	return c.send(Stanza{
 		Recipient: jid,
 		Type:      typeof,
 		Body:      body,
@@ -298,20 +298,20 @@ func (c *Conn) SendMessage(jid, typeof, body string) {
 	}.Render(SendMessageStanza))
 }
 
-func (c *Conn) SendComposing(jid, typeof string) {
+func (c *Conn) SendComposing(jid, typeof string) error {
 	if c == nil {
-		return
+		return fmt.Errorf("xmpp: conn is nil")
 	}
 
-	c.send(Stanza{
+	return c.send(Stanza{
 		Recipient: jid,
 		Type:      typeof,
 		JID:       c.JID,
 	}.Render(SendComposingStanza))
 }
 
-func (c *Conn) SendPaused(jid, typeof string) {
-	c.send(Stanza{
+func (c *Conn) SendPaused(jid, typeof string) error {
+	return c.send(Stanza{
 		Recipient: jid,
 		Type:      typeof,
 		JID:       c.JID,

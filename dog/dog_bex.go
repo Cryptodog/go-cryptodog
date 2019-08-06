@@ -257,9 +257,6 @@ func (r *Room) handleGroupBEXPacket(from string, data []byte) {
 		return
 	}
 
-	j, _ := json.Marshal(b)
-	yo.Warn(string(j))
-
 	for _, bx := range b {
 		switch bx.Header {
 		case FILE_ATTACHMENT:
@@ -406,78 +403,7 @@ func (r *Room) handlePrivateBEXPacket(from string, data []byte) {
 	}
 }
 
-func (r *Room) bexGroupTransmitter() {
-	// var tmp []BEX
-	// for {
-	// 	if r.killed {
-	// 		return
-	// 	}
-
-	// 	var tout = float64(100)
-
-	// 	select {
-	// 	case <-time.After(time.Duration(tout) * time.Millisecond):
-	// 		if len(tmp) == 0 {
-	// 			if tout > 0 {
-	// 				// AIMD
-	// 				tout *= .75
-	// 			}
-	// 			continue
-	// 		}
-	// 		if len(tmp) > 2 {
-	// 			for len(tmp) > 0 {
-	// 				high := len(tmp)
-	// 				if high > 4 {
-	// 					high = 4
-	// 				}
-
-	// 				low := 0
-
-	// 				segment := tmp[low:high]
-	// 				d := EncodeBEX(segment)
-	// 				r.Group(d)
-
-	// 				tmp = tmp[high:]
-	// 				time.Sleep()
-	// 			}
-
-	// 			tmp = []BEX{}
-	// 		} else {
-	// 			d := EncodeBEX(tmp)
-	// 			r.Group(d)
-	// 			tmp = []BEX{}
-	// 		}
-	// 		if tout < 2000 {
-	// 			tout += 900
-	// 		}
-	// 	case t := <-r.bexAddTout:
-	// 		tout += t
-	// 	case t := <-r.bexTx:
-	// 		tmp = append(tmp, t...)
-	// 	}
-	// }
-}
-
 func (r *Room) SendBEXGroup(b []BEX) {
-	// tmp := b
-	// for len(tmp) > 0 {
-	// 	high := len(tmp)
-	// 	if high > 4 {
-	// 		high = 4
-	// 	}
-
-	// 	low := 0
-
-	// 	segment := tmp[low:high]
-	// 	yo.Warn("Sending seg")
-	// 	yo.Spew(segment)
-	// 	d := EncodeBEX(segment)
-	// 	r.Group(d)
-
-	// 	tmp = tmp[high:]
-	// 	time.Sleep(100 * time.Millisecond)
-	// }
-
 	d := EncodeBEX(b)
 	r.Group(d)
 }

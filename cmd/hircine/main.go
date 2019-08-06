@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/Cryptodog/go-cryptodog/dog"
+	"github.com/fatih/color"
 
 	"github.com/davecgh/go-spew/spew"
 
@@ -34,8 +36,10 @@ func main() {
 
 func _main(args []string) {
 	spew.Config.DisableMethods = true
-	yo.Spew(args)
 
+	color.Set(color.FgGreen)
+	os.Stdout.Write(AsciiArt)
+	color.Unset()
 	l, err := net.Listen("tcp", yo.StringG("l"))
 	if err != nil {
 		yo.Fatal(err)
@@ -60,6 +64,7 @@ type conn struct {
 	r     *irc.Reader
 	w     *irc.Writer
 	nick  string
+	room  string
 	flags int
 }
 
@@ -80,7 +85,6 @@ func handleConn(cn net.Conn) {
 			return
 		}
 
-		yo.Spew(msg)
 		quit := con.handleCommand(msg)
 		if quit {
 			con.c.Close()
@@ -90,6 +94,8 @@ func handleConn(cn net.Conn) {
 }
 
 func (c *conn) handleCommand(msg *irc.Message) bool {
+	HOST := "crypto.dog"
+
 	switch msg.Command {
 	case "NICK":
 		c.nick = msg.Params[0]
@@ -100,15 +106,24 @@ func (c *conn) handleCommand(msg *irc.Message) bool {
 	case "JOIN":
 		c.joinRoom(msg.Params)
 	case "PRIVMSG":
-		if msg.Params[0][0] == '#' {
-			c.cd.GM(msg.Params[0][1:], msg.Params[1])
+		if len(msg.Params) > 1 {
+			targetMessage := msg.Params[1]
+			if msg.Params[0][0] == '#' {
+				targetRoom := msg.Params[0][1:]
+				yo.Ok("Sending message", targetRoom, targetMessage)
+				c.cd.GM(targetRoom, targetMessage)
+			} else {
+				targetUser := msg.Params[0]
+				c.cd.DM(c.room, targetUser, targetMessage)
+			}
 		}
 	case "QUIT":
 		c.cd.Disconnect()
 		c.cd = nil
 		return true
+	case "WHO":
+
 	case "PING":
-		HOST := "crypto.dog"
 		fmt.Fprintf(c.c, ":%s PONG %s :%s\n", HOST, HOST, HOST)
 	}
 
@@ -147,21 +162,53 @@ func (c *conn) joinRoom(s []string) {
 
 	room := strings.TrimLeft(s[0], "#")
 
+	c.room = room
+
+	c.w.WriteMessage(&irc.Message{
+		Prefix: &irc.Prefix{
+			Name: displayName(c.nick),
+		},
+		Command: "JOIN",
+		Params:  []string{"#" + room},
+	})
+
 	if c.cd == nil {
 		c.cd = dog.New()
-		c.cd.Opts = dog.DMDisabled | dog.Human
+		c.cd.Opts = dog.Human
 		c.cd.DB = dog.Disk(yo.StringG("s"))
 		c.cd.SetMods([]string{
 			"94D6D86FB4F2B2EE7AC2A639ABFBBC390113DD0D",
 		})
 		c.cd.DB.Delete("rooms")
 
+		c.cd.On(dog.NicknameInUse, func(e dog.Event) {
+			yo.Warn("nickname in use")
+		})
+
 		c.cd.On(dog.Connected, func(e dog.Event) {
 			c.cd.JoinRoom(room, c.nick)
 		})
 
 		c.cd.On(dog.RoomJoined, func(e dog.Event) {
+			rm := c.cd.GetRoom(e.Room)
+			users := rm.GetUsernames()
+			HOST := "crypto.dog"
+			for _, v := range users {
+				fmt.Fprintf(c.c, ":%s 352 %s #%s %s %s %s %s %s\n", HOST, c.nick, room, v, HOST, HOST, "*", "0"+v)
+			}
+
+			fmt.Fprintf(c.c, ":%s 315 %s #%s :End of /WHO list\n", HOST, c.nick, room)
+
 			c.notice("AUTH", "you joined "+e.Room)
+			for _, v := range c.cd.GetRoom(e.Room).GetUsernames() {
+				c.w.WriteMessage(&irc.Message{
+					Prefix: &irc.Prefix{
+						Name: displayName(v),
+					},
+					Command: "JOIN",
+					Params:  []string{"#" + e.Room},
+				})
+			}
 		})
 
 		c.cd.On(dog.UserJoined, func(d dog.Event) {
@@ -185,21 +232,11 @@ func (c *conn) joinRoom(s []string) {
 		})
 
 		c.cd.On(dog.GroupMessage, func(e dog.Event) {
-			strs := strings.Split(
-				strings.Replace(e.Body, "\r", "", -1), "\n")
+			c.sendPrivMsgSplit(e.User, "#"+e.Room, e.Body)
+		})
 
-			for _, m := range strs {
-				c.w.WriteMessage(&irc.Message{
-					Prefix: &irc.Prefix{
-						Name: displayName(e.User),
-					},
-					Command: "PRIVMSG",
-					Params: []string{
-						"#" + e.Room,
-						m,
-					},
-				})
-			}
+		c.cd.On(dog.PrivateMessage, func(e dog.Event) {
+			c.sendPrivMsgSplit(e.User, c.nick, e.Body)
 		})
 
 		go func() {
@@ -210,5 +247,23 @@ func (c *conn) joinRoom(s []string) {
 		}()
 	} else {
 		c.cd.JoinRoom(room, c.nick)
+	}
+}
+
+func (c *conn) sendPrivMsgSplit(user, target, body string) {
+	strs := strings.Split(
+		strings.Replace(body, "\r", "", -1), "\n")
+
+	for _, m := range strs {
+		c.w.WriteMessage(&irc.Message{
+			Prefix: &irc.Prefix{
+				Name: displayName(user),
+			},
+			Command: "PRIVMSG",
+			Params: []string{
+				target,
+				m,
+			},
+		})
 	}
 }

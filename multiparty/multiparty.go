@@ -62,10 +62,18 @@ type Me struct {
 	Buddies            map[string]*Buddy
 	_sendFunc          func([]byte)
 	lastBroadcast      time.Time
-	lock               *sync.Mutex
-	keyLock            *sync.Mutex
+	buddyLock          sync.Mutex
+	keyLock            sync.Mutex
 	keyMap             map[string]*time.Time
 	blacklist          map[string]bool
+}
+
+func (m *Me) lock() {
+	m.buddyLock.Lock()
+}
+
+func (me *Me) unlock() {
+	me.buddyLock.Unlock()
 }
 
 func Sha512(input []byte) []byte {
@@ -355,6 +363,9 @@ func (me *Me) receiveMessage(sender string, messageSrc string, mt map[string]int
 }
 
 func (me *Me) genFingerprint(nick string) string {
+	me.lock()
+
+	defer me.unlock()
 	key := me.PublicKey[:]
 	if nick != "" {
 		if me.Buddies[nick] == nil {
@@ -458,7 +469,6 @@ func NewMe(username string, profile string) (*Me, error) {
 	me.Name = username
 	me.Buddies = make(map[string]*Buddy)
 	me.keyMap = make(map[string]*time.Time)
-	me.keyLock = new(sync.Mutex)
 	me.blacklist = make(map[string]bool)
 
 	if profile != "" {
@@ -474,9 +484,6 @@ func NewMe(username string, profile string) (*Me, error) {
 	}
 
 	me._sendFunc = func([]byte) {}
-	// Enforce mutually exclusive access
-	me.lock = new(sync.Mutex)
-
 	return me, nil
 }
 
@@ -501,16 +508,16 @@ func (me *Me) ReceiveMessage(sender, message string) (string, []byte, error) {
 		}
 	}
 
-	me.lock.Lock()
+	me.lock()
 	keyAuth, b, err := me.receiveMessage(sender, message, mt)
-	me.lock.Unlock()
+	me.unlock()
 	return keyAuth, b, err
 }
 
 func (me *Me) SendMessage(message []byte) {
-	me.lock.Lock()
+	me.lock()
 	me.sendMessage(message)
-	me.lock.Unlock()
+	me.unlock()
 }
 
 func (me *Me) ClearBlacklist() {
@@ -520,35 +527,39 @@ func (me *Me) ClearBlacklist() {
 }
 
 func (me *Me) NamesByFingerprint(fp string) []string {
-	var names []string
-	me.lock.Lock()
+	var allNames []string
+	var matchedNames []string
+	me.lock()
 	for k := range me.Buddies {
+		allNames = append(allNames, k)
+	}
+	me.unlock()
+
+	for _, k := range allNames {
 		if fp == me.genFingerprint(k) {
-			names = append(names, k)
+			matchedNames = append(matchedNames, k)
 		}
 	}
-	me.lock.Unlock()
-	sort.Strings(names)
-	return names
+
+	sort.Strings(matchedNames)
+	return matchedNames
 }
 
 func (me *Me) SortedNames() []string {
 	var names []string
-	me.lock.Lock()
 	for k := range me.Buddies {
 		names = append(names, k)
 	}
-	me.lock.Unlock()
 	sort.Strings(names)
 	return names
 }
 
 func (me *Me) DestroyUser(name string) {
-	me.lock.Lock()
+	me.lock()
 
 	delete(me.Buddies, name)
 	delete(me.keyMap, name)
-	me.lock.Unlock()
+	me.unlock()
 }
 
 func (me *Me) saveProfile() string {
@@ -556,9 +567,9 @@ func (me *Me) saveProfile() string {
 }
 
 func (me *Me) SaveProfile() string {
-	me.lock.Lock()
+	me.lock()
 	b := me.saveProfile()
-	me.lock.Unlock()
+	me.unlock()
 	return b
 }
 
@@ -568,35 +579,34 @@ func (me *Me) Fingerprint(username string) string {
 }
 
 func (me *Me) FingerprintUser(username string) (string, error) {
-	me.lock.Lock()
+	me.lock()
 
 	if me.Buddies[username] == nil {
-		me.lock.Unlock()
+		me.unlock()
 		return "", fmt.Errorf("no user found")
 	}
 
-	me.lock.Unlock()
+	me.unlock()
 	fp := me.genFingerprint(username)
 	return fpspace(fp), nil
-
 }
 
 func (me *Me) Shutdown() {
 }
 
 func (me *Me) IsSessionInitialized(nickname string) bool {
-	me.lock.Lock()
+	me.lock()
 
 	if me.Buddies[nickname] == nil {
-		me.lock.Unlock()
+		me.unlock()
 		return false
 	}
 
 	if me.Buddies[nickname].MpSecretKey == nil {
-		me.lock.Unlock()
+		me.unlock()
 		return false
 	}
 
-	me.lock.Unlock()
+	me.unlock()
 	return true
 }

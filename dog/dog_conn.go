@@ -102,6 +102,10 @@ func (c *Conn) Run() error {
 	return <-c.errc
 }
 
+func (c *Conn) Uptime() time.Duration {
+	return time.Since(c.time)
+}
+
 func (c *Conn) populateConnection() {
 	var errPeriod = time.Duration(2 * time.Second)
 
@@ -192,14 +196,18 @@ func (c *Conn) processEvent() error {
 		if rm != nil {
 			if jid.Host == c.Conference {
 				if jid.Node == rm.MyName {
+					rm.ml.Lock()
 					if rm.joinedEvent == false {
 						rm.joinedEvent = true
+						rm.ml.Unlock()
 						go func() {
 							time.Sleep(2000 * time.Millisecond)
 							rm.emit(Event{
 								Type: RoomJoined,
 							})
 						}()
+					} else {
+						rm.ml.Unlock()
 					}
 				}
 			}
@@ -281,6 +289,11 @@ func (c *Conn) processMessage(msg xmpp.Message) {
 		newUser, data, err := rm.Mp.ReceiveMessage(nick, msg.Body)
 		if err != nil {
 			yo.L(4).Warn(err)
+			rm.emit(Event{
+				Type: InvalidGroupMessage,
+				User: nick,
+				Room: jid.Local,
+			})
 		} else {
 			if newUser != "" {
 				rm.ml.Lock()
@@ -463,7 +476,7 @@ func (c *Conn) JoinRoom(room, nick string) {
 
 	c.rl.Lock()
 	defer c.rl.Unlock()
-	if c.rooms[room] != nil {
+	if r := c.rooms[room]; r != nil {
 		return
 	}
 
@@ -486,10 +499,6 @@ func (c *Conn) joinMuc(room, nick string) {
 		ms[k] = v.MyName
 	}
 	c.storeJSON("rooms", ms)
-
-	r.bexTx = make(chan []BEX)
-	r.bexAddTout = make(chan float64)
-	go r.bexGroupTransmitter()
 
 	c.c.JoinMUC(r.Name, c.Conference, r.MyName)
 
