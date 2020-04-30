@@ -17,6 +17,10 @@ func main() {
 			cn.JoinRoom(yo.StringG("r"), yo.StringG("n"))
 		})
 
+		cn.On(dog.Any, func(e dog.Event) {
+			yo.Spew(e)
+		})
+
 		cn.Run()
 	})
 

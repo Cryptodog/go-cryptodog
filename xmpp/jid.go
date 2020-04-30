@@ -21,11 +21,11 @@ func ParseJID(s string) (JID, error) {
 
 	j := JID{}
 
-	spl := strings.Split(s, "@")
+	spl := strings.SplitN(s, "@", 2)
 	j.Local = spl[0]
 
 	if strings.Contains(spl[1], "/") {
-		split := strings.Split(spl[1], "/")
+		split := strings.SplitN(spl[1], "/", 2)
 		j.Host = split[0]
 		j.Node = split[1]
 	} else {
