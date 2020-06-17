@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"cryptodog-server/proto"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -39,8 +40,14 @@ func readMessage(c *websocket.Conn) (*proto.Message, error) {
 		return nil, err
 	}
 
+	if len(b) == 0 {
+		return nil, fmt.Errorf("empty message received")
+	}
+
 	var msg proto.Message
-	return &msg, json.Unmarshal(b, &msg)
+	msg.Type = b[0]
+	msg.Raw = json.RawMessage(b[1:])
+	return &msg, nil
 }
 
 // Send a SpecificMessage to a single client and return success boolean. May block!
@@ -173,7 +180,7 @@ func ws(w http.ResponseWriter, r *http.Request) {
 				/* XXX: potentially blocking operation.
 				   Can't just start a new thread w/ mutex; that might lead to messages not being scheduled for delivery in the order they were intended.
 				   A workaround might be to give Sendc a buffer, but of what size? */
-				err = c.WriteJSON(msg.Pack())
+				err = c.WriteMessage(websocket.TextMessage, []byte(msg.String()))
 				if err != nil {
 					errc <- err
 					return

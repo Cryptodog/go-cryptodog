@@ -3,27 +3,31 @@ package dog
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"unicode/utf8"
 
+	"github.com/Cryptodog/go-cryptodog-newprotocol/proto"
+
 	"github.com/Cryptodog/go-cryptodog/multiparty"
-	"github.com/Cryptodog/go-cryptodog/xmpp"
 	"github.com/coyim/otr3"
+	"github.com/gorilla/websocket"
 	"github.com/superp00t/etc/yo"
 )
 
 type Room struct {
 	Name             string
-	MyName           string
-	Mp               *multiparty.Me
+	Nickname         string
+	Multiparty       *multiparty.Me
 	Members          map[string]*Member
+	membersLock      sync.Mutex
 	ModerationTables map[string][]string
 
-	ml          *sync.Mutex
+	conn        *Conn
 	killed      bool
-	c           *Conn
+	socket      *websocket.Conn
 	bexAddTout  chan float64
 	bexTx       chan []BEX
 	joinedEvent bool
@@ -42,9 +46,9 @@ func (m *Member) Name() string {
 }
 
 func (c *Conn) GetRoom(name string) *Room {
-	c.rl.Lock()
+	c.roomsLock.Lock()
 	room := c.rooms[name]
-	c.rl.Unlock()
+	c.roomsLock.Unlock()
 	return room
 }
 
@@ -74,7 +78,7 @@ func (r *Room) GM(body string) {
 }
 
 func (r *Room) Group(b []byte) {
-	r.Mp.SendMessage(b)
+	r.Multiparty.SendMessage(b)
 }
 
 func (r *Room) DM(user, data string) {
@@ -82,7 +86,7 @@ func (r *Room) DM(user, data string) {
 }
 
 func (r *Room) IsMod(user string) bool {
-	for _, v := range r.c.GetMods() {
+	for _, v := range r.conn.GetMods() {
 		if v == r.GroupFingerprint(user) {
 			return true
 		}
@@ -95,9 +99,9 @@ func (r *Room) GetMember(s string) *Member {
 	if r == nil {
 		return nil
 	}
-	r.ml.Lock()
+	r.membersLock.Lock()
 	mem := r.Members[s]
-	r.ml.Unlock()
+	r.membersLock.Unlock()
 	return mem
 }
 
@@ -106,7 +110,7 @@ func (m *Member) DM(data string) {
 		return
 	}
 
-	if m.r.c.opt(DMDisabled) {
+	if m.r.conn.opt(DMDisabled) {
 		return
 	}
 
@@ -120,22 +124,18 @@ func (m *Member) DM(data string) {
 	}
 
 	for _, v := range vm {
-		m.r.c.c.SendMessage(xmpp.JID{
-			Local: m.r.Name,
-			Host:  m.r.c.Conference,
-			Node:  m.nickname,
-		}.String(), "chat", string(v))
+		m.Raw(string(v))
 	}
 }
 
 func (m *Member) initOtr() {
-	if m.r.c.opt(DMDisabled) {
+	if m.r.conn.opt(DMDisabled) {
 		return
 	}
 
 	if m.otr == nil {
 		key := new(otr3.DSAPrivateKey)
-		b64, err := base64.StdEncoding.DecodeString(m.r.c.loadString("otr"))
+		b64, err := base64.StdEncoding.DecodeString(m.r.conn.loadString("otr"))
 		if err != nil {
 			panic(err)
 		}
@@ -158,22 +158,18 @@ func (m *Member) initOtr() {
 
 func (r *Room) Destroy() {
 	r.killed = true
+	r.socket.Close()
 }
 
 func (r *Room) emit(e Event) {
 	e.Room = r.Name
-	r.c.emit(e)
+	r.conn.emit(e)
 }
 
 func (r *Room) transmitMp(b []byte) {
-	r.c.c.SendMessage(
-		xmpp.JID{
-			Local: r.Name,
-			Host:  r.c.Conference,
-		}.String(),
-		"groupchat",
-		string(b),
-	)
+	r.writeMessage(&proto.GroupMessage{
+		Text: string(b),
+	})
 }
 
 func (m *Member) HandleSecurityEvent(event otr3.SecurityEvent) {
@@ -234,7 +230,7 @@ func (m *Member) Answer(data string) {
 }
 
 func (m *Member) prepareAnswer(answer string, ask bool) string {
-	buddyMpFingerprint := m.r.Mp.Fingerprint(m.nickname)
+	buddyMpFingerprint := m.r.Multiparty.Fingerprint(m.nickname)
 
 	first := ""
 	second := ""
@@ -243,11 +239,11 @@ func (m *Member) prepareAnswer(answer string, ask bool) string {
 		answer = strings.Replace(answer, string(v), "", -1)
 	}
 
-	mee := m.r.Mp.Fingerprint("")
+	me := m.r.Multiparty.Fingerprint("")
 
 	if buddyMpFingerprint != "" {
 		if ask {
-			first = mee
+			first = me
 		} else {
 			first = buddyMpFingerprint
 		}
@@ -255,7 +251,7 @@ func (m *Member) prepareAnswer(answer string, ask bool) string {
 		if ask {
 			second = buddyMpFingerprint
 		} else {
-			second = mee
+			second = me
 		}
 
 		answer += ";" + first + ";" + second
@@ -302,21 +298,10 @@ func (m *Member) Ask(question, answer string) {
 }
 
 func (m *Member) Raw(str string) {
-	if m == nil {
-		return
-	}
-
-	if err := m.r.c.c.SendMessage(
-		xmpp.JID{
-			Local: m.r.Name,
-			Host:  m.r.c.Conference,
-			Node:  m.nickname,
-		}.String(),
-		"chat",
-		str,
-	); err != nil {
-
-	}
+	m.r.writeMessage(&proto.PrivateMessage{
+		To:   m.Name(),
+		Text: str,
+	})
 }
 
 // Sends group composing message via Binary Extensions.
@@ -363,61 +348,158 @@ func (m *Room) SendPrivatePaused(target string) {
 	})
 }
 
-// Sends composing message via XMPP.
-func (m *Room) SendXGroupComposing() {
-	if m == nil {
-		yo.Warn("room is nil")
-		return
-	}
-	m.c.c.SendComposing(xmpp.JID{
-		Local: m.Name,
-		Host:  m.c.Conference,
-	}.String(),
-		"groupchat")
-}
-
-func (m *Room) SendXGroupPaused() {
-	if m == nil {
-		yo.Warn("room is nil")
-		return
-	}
-	m.c.c.SendPaused(xmpp.JID{
-		Local: m.Name,
-		Host:  m.c.Conference,
-	}.String(),
-		"groupchat")
-}
-
-func (m *Room) SendXPrivateComposing(target string) {
-	if m == nil {
-		yo.Warn("room is nil")
-		return
-	}
-	m.c.c.SendComposing(xmpp.JID{
-		Local: m.Name,
-		Host:  m.c.Conference,
-		Node:  target,
-	}.String(),
-		"chat")
-}
-
-func (m *Room) SendXPrivatePaused(target string) {
-	if m == nil {
-		yo.Warn("room is nil")
-		return
-	}
-	m.c.c.SendPaused(xmpp.JID{
-		Local: m.Name,
-		Host:  m.c.Conference,
-		Node:  target,
-	}.String(),
-		"chat")
-}
-
 func (m *Room) GetUsernames() []string {
-	return m.Mp.SortedNames()
+	return m.Multiparty.SortedNames()
 }
 
 func (m *Room) GroupFingerprint(user string) string {
-	return m.Mp.Fingerprint(user)
+	return m.Multiparty.Fingerprint(user)
+}
+
+func (m *Room) writeMessage(msg proto.SpecificMessage) error {
+	packedMsg := msg.Pack()
+	return m.socket.WriteMessage(websocket.TextMessage, []byte(packedMsg.String()))
+}
+
+func (m *Room) handleUserQuit(lm *proto.LeaveMessage) {
+	m.membersLock.Lock()
+	delete(m.Members, lm.Name)
+	m.membersLock.Unlock()
+	m.Multiparty.DestroyUser(lm.Name)
+	m.emit(Event{
+		Type: UserLeft,
+		Room: m.Name,
+		User: lm.Name,
+	})
+}
+
+func (m *Room) handleUserJoin(jm *proto.JoinMessage) {
+
+}
+
+func (m *Room) handleGroupMessage(gm *proto.GroupMessage) {
+	if m.IsBlocked(gm.From) {
+		return
+	}
+
+	newUser, data, err := m.Multiparty.ReceiveMessage(gm.From, gm.Text)
+	if err != nil {
+		yo.Warn(err)
+		return
+	}
+
+	if newUser != "" {
+		m.membersLock.Lock()
+		m.Members[gm.From] = &Member{
+			false,
+			m,
+			newUser,
+			nil,
+			nil,
+		}
+		go func() {
+			m.emit(Event{
+				Type: UserJoined,
+				User: newUser,
+				Room: m.Name,
+			})
+		}()
+	}
+
+	if len(data) > 0 {
+		m.conn.processGroupchatBytes(m.Name, gm.From, data)
+	}
+}
+
+func (m *Room) handlePrivateMessage(pm *proto.PrivateMessage) {
+	if m.conn.opt(DMDisabled) {
+		yo.L(4).Warn("DMs are disabled")
+		return
+	}
+
+	memb := m.GetMember(pm.From)
+	if memb == nil {
+		yo.Warn("No member", pm.From)
+		return
+	}
+
+	memb.initOtr()
+
+	plain, toSend, err := memb.otr.Receive(otr3.ValidMessage(pm.Text))
+	if err != nil {
+		yo.L(4).Warn(err)
+	} else {
+		for _, v := range toSend {
+			memb.Raw(string(v))
+		}
+		if str := string(plain); str != "" {
+			m.conn.processPrivateString(m.Name, pm.From, str)
+		}
+	}
+}
+
+func (m *Room) handleRosterMessage(rm *proto.RosterMessage) {
+
+}
+
+func (m *Room) handleServerMessage(data []byte) error {
+	var mType proto.Type
+	if len(data) == 0 {
+		return fmt.Errorf("dog: empty packet received from server")
+	}
+
+	mType = proto.Type(data[0])
+	rawMessage := data[1:]
+	var err error
+
+	switch mType {
+	case proto.TypeJoinMessage:
+		decoded := proto.JoinMessage{}
+		err = json.Unmarshal(rawMessage, &decoded)
+		if err == nil {
+			m.handleUserJoin(&decoded)
+		}
+	case proto.TypeLeaveMessage:
+		decoded := proto.LeaveMessage{}
+		err = json.Unmarshal(rawMessage, &decoded)
+		if err == nil {
+			m.handleUserQuit(&decoded)
+		}
+	case proto.TypeGroupMessage:
+		decoded := proto.GroupMessage{}
+		err = json.Unmarshal(rawMessage, &decoded)
+		if err == nil {
+			m.handleGroupMessage(&decoded)
+		}
+	case proto.TypePrivateMessage:
+		decoded := proto.PrivateMessage{}
+		err = json.Unmarshal(rawMessage, &decoded)
+		if err != nil {
+			m.handlePrivateMessage(&decoded)
+		}
+	case proto.TypeRosterMessage:
+		decoded := proto.RosterMessage{}
+		err = json.Unmarshal(rawMessage, &decoded)
+		if err != nil {
+			m.handleRosterMessage(&decoded)
+		}
+	case proto.TypeErrorMessage:
+		decoded := proto.ErrorMessage{}
+		err = json.Unmarshal(rawMessage, &decoded)
+		if err == nil {
+			switch decoded.Error {
+			case "Nickname in use.":
+				m.emit(Event{
+					Type: NicknameInUse,
+				})
+				return nil
+			default:
+				return fmt.Errorf("server returned error: %s", decoded.Error)
+			}
+		}
+	default:
+		err = fmt.Errorf("Unknown message type: %s", mType)
+	}
+
+	return err
 }

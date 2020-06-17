@@ -29,6 +29,7 @@ const (
 	WebRTCAnswer
 	WebRTCIceCandidate
 	InvalidGroupMessage
+	Roster
 )
 
 // Event describes
@@ -43,17 +44,17 @@ type Event struct {
 
 // On registers a function that will handle an Event.
 func (c *Conn) On(_type EventType, handler EventHandler) {
-	c.h[_type] = append(c.h[_type], handler)
+	c.handlers[_type] = append(c.handlers[_type], handler)
 }
 
 func (c *Conn) emit(evt Event) {
-	c.hl.Lock()
-	defer c.hl.Unlock()
-	for _, v := range c.h[Any] {
+	c.handlersLock.Lock()
+	defer c.handlersLock.Unlock()
+	for _, v := range c.handlers[Any] {
 		go v(evt)
 	}
 
-	for _, v := range c.h[evt.Type] {
+	for _, v := range c.handlers[evt.Type] {
 		go v(evt)
 	}
 }

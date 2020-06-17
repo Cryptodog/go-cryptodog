@@ -2,25 +2,47 @@ package proto
 
 import (
 	"encoding/json"
+	"fmt"
 )
 
+type Type uint8
+
 const (
-	TypeJoinMessage = iota
-	TypeLeaveMessage
-	TypeGroupMessage
-	TypePrivateMessage
-	TypeRosterMessage
-	TypeErrorMessage
+	TypeJoinMessage    Type = 'j'
+	TypeLeaveMessage   Type = 'l'
+	TypeGroupMessage   Type = 'g'
+	TypePrivateMessage Type = 'p'
+	TypeRosterMessage  Type = 'r'
+	TypeErrorMessage   Type = 'e'
 )
+
+func (t Type) String() string {
+	switch t {
+	case TypeJoinMessage:
+		return "JoinMessage"
+	case TypeLeaveMessage:
+		return "LeaveMessage"
+	case TypeGroupMessage:
+		return "GroupMessage"
+	case TypePrivateMessage:
+		return "PrivateMessage"
+	case TypeRosterMessage:
+		return "RosterMessage"
+	case TypeErrorMessage:
+		return "ErrorMessage"
+	default:
+		return fmt.Sprintf("Unknown (0x02X)", t)
+	}
+}
 
 // Generic message type; requires manual unpacking of Raw field into a SpecificMessage identified by Type field.
 type Message struct {
-	Type uint8
+	Type Type
 	Raw  json.RawMessage
 }
 
-func (msg *Message) Bytes() []byte {
-	return append([]byte{msg.Type}, []byte(msg.Raw)...)
+func (msg *Message) String() string {
+	return string(msg.Type) + string(msg.Raw)
 }
 
 type SpecificMessage interface {

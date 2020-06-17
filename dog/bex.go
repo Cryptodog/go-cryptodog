@@ -282,7 +282,7 @@ func (r *Room) handleGroupBEXPacket(from string, data []byte) {
 				Body: bx.Color,
 			})
 		case RTC_ANSWER:
-			if bx.Target == r.MyName {
+			if bx.Target == r.Nickname {
 				r.emit(Event{
 					Type: WebRTCAnswer,
 					User: from,
@@ -290,7 +290,7 @@ func (r *Room) handleGroupBEXPacket(from string, data []byte) {
 				})
 			}
 		case RTC_OFFER:
-			if bx.Target == r.MyName {
+			if bx.Target == r.Nickname {
 				r.emit(Event{
 					Type: WebRTCOffer,
 					User: from,
@@ -298,7 +298,7 @@ func (r *Room) handleGroupBEXPacket(from string, data []byte) {
 				})
 			}
 		case ICE_CANDIDATE:
-			if bx.Target == r.MyName {
+			if bx.Target == r.Nickname {
 				js, _ := json.Marshal(ICECandidate{
 					bx.ICECandidate,
 					bx.SDPMid,
@@ -339,16 +339,16 @@ func (r *Room) SetModerationTable(tk string, tv []string) {
 	switch tk {
 	case "keys":
 		for _, v := range tv {
-			names := r.Mp.NamesByFingerprint(v)
+			names := r.Multiparty.NamesByFingerprint(v)
 			for _, n := range names {
-				r.Mp.BlacklistUser(n)
+				r.Multiparty.BlacklistUser(n)
 			}
 		}
 	case "nicknames":
-		for _, v := range r.Mp.SortedNames() {
+		for _, v := range r.Multiparty.SortedNames() {
 			for _, gx := range tv {
 				if m, _ := regexp.MatchString("(?i)"+gx, v); m {
-					r.Mp.BlacklistUser(v)
+					r.Multiparty.BlacklistUser(v)
 				}
 			}
 		}
