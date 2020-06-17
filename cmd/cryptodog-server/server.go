@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"sync"
 
-	"cryptodog-server/proto"
+	"github.com/Cryptodog/go-cryptodog/proto"
 
 	"github.com/gorilla/websocket"
 )
