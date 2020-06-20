@@ -187,13 +187,13 @@ func ws(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			case <-done:
-				close(leavec)
 				return
 			}
 		}
 	}()
 
 	log.Println(<-errc)
+	close(leavec)
 	// Tell Sendc thread to clean up.
 	done <- true
 	if hasJoined {
