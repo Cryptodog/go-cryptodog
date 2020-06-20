@@ -43,11 +43,10 @@ func readMessage(c *websocket.Conn) (*proto.Message, error) {
 	if len(b) == 0 {
 		return nil, fmt.Errorf("empty message received")
 	}
-
-	var msg proto.Message
-	msg.Type = b[0]
-	msg.Raw = json.RawMessage(b[1:])
-	return &msg, nil
+	return &proto.Message{
+		Type: b[0],
+		Raw:  b[1:],
+	}, nil
 }
 
 // Send a SpecificMessage to a single client and return success boolean. May block!
@@ -155,7 +154,7 @@ func ws(w http.ResponseWriter, r *http.Request) {
 				err = handlePrivateMessage(&decoded, room, &user)
 
 			default:
-				errc <- fmt.Errorf("unknown message type: %v", msg.Type)
+				errc <- fmt.Errorf("unknown message type: %c", msg.Type)
 				return
 			}
 
@@ -180,7 +179,7 @@ func ws(w http.ResponseWriter, r *http.Request) {
 				/* XXX: potentially blocking operation.
 				   Can't just start a new thread w/ mutex; that might lead to messages not being scheduled for delivery in the order they were intended.
 				   A workaround might be to give Sendc a buffer, but of what size? */
-				err = c.WriteMessage(websocket.TextMessage, []byte(msg.String()))
+				err = c.WriteMessage(websocket.TextMessage, []byte(msg.Pack().Bytes()))
 				if err != nil {
 					errc <- err
 					return
