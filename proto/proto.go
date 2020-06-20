@@ -40,7 +40,7 @@ type LeaveMessage struct {
 }
 
 type GroupMessage struct {
-	From string `json:"name,omitempty"`
+	From string `json:"from,omitempty"`
 	Text string `json:"text"`
 }
 
