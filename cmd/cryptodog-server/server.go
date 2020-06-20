@@ -179,7 +179,7 @@ func ws(w http.ResponseWriter, r *http.Request) {
 				/* XXX: potentially blocking operation.
 				   Can't just start a new thread w/ mutex; that might lead to messages not being scheduled for delivery in the order they were intended.
 				   A workaround might be to give Sendc a buffer, but of what size? */
-				err = c.WriteMessage(websocket.TextMessage, []byte(msg.Pack().Bytes()))
+				err = c.WriteMessage(websocket.TextMessage, msg.Pack().Bytes())
 				if err != nil {
 					errc <- err
 					return
