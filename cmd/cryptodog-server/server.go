@@ -64,11 +64,11 @@ func sendMessage(user *User, msg proto.SpecificMessage) bool {
 	}
 }
 
-// Send a SpecificMessage to a group of clients. May block!
+// Send a SpecificMessage to a group of clients in no guaranteed order. Will not block.
 func broadcastMessage(users map[string]*User, msg proto.SpecificMessage) {
 	for _, user := range users {
 		// XXX: ignoring return value
-		sendMessage(user, msg)
+		go sendMessage(user, msg)
 	}
 }
 
@@ -180,10 +180,8 @@ func ws(w http.ResponseWriter, r *http.Request) {
 		for {
 			select {
 			case msg := <-sendc:
-				/* XXX: potentially blocking operation.
-				   Can't just start a new thread w/ mutex; that might lead to messages not being scheduled for delivery in the order they were intended.
-				   A workaround might be to give Sendc a buffer, but of what size? */
-				err = c.WriteMessage(websocket.TextMessage, msg.Pack().Bytes())
+				// XXX: potentially blocking operation
+				err := c.WriteMessage(websocket.TextMessage, msg.Pack().Bytes())
 				if err != nil {
 					errc <- err
 					return
@@ -293,17 +291,17 @@ func handleGroupMessage(msg *proto.GroupMessage, room *Room, user *User) {
 
 func handlePrivateMessage(msg *proto.PrivateMessage, room *Room, user *User) error {
 	room.Mutex.Lock()
-	defer room.Mutex.Unlock()
 
 	if to, ok := room.Users[msg.To]; ok {
-		if !sendMessage(to, &proto.PrivateMessage{
+		room.Mutex.Unlock()
+		// XXX: ignoring return value
+		sendMessage(to, &proto.PrivateMessage{
 			From: user.Name,
 			Text: msg.Text,
-		}) {
-			return fmt.Errorf("Failed to deliver private message to recipient.")
-		}
+		})
 		return nil
 	}
+	room.Mutex.Unlock()
 	return fmt.Errorf("Recipient not in room.")
 }
 
