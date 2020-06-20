@@ -141,7 +141,7 @@ func ws(w http.ResponseWriter, r *http.Request) {
 					errc <- err
 					return
 				}
-				err = handleGroupMessage(&decoded, room, &user)
+				handleGroupMessage(&decoded, room, &user)
 
 			case proto.TypePrivateMessage:
 				if !hasJoined {
@@ -282,14 +282,13 @@ func handleLeaveMessage(room *Room, user *User) {
 	allRoomsMutex.Unlock()
 }
 
-func handleGroupMessage(msg *proto.GroupMessage, room *Room, user *User) error {
+func handleGroupMessage(msg *proto.GroupMessage, room *Room, user *User) {
 	room.Mutex.Lock()
 	broadcastMessage(room.Users, &proto.GroupMessage{
 		From: user.Name,
 		Text: msg.Text,
 	})
 	room.Mutex.Unlock()
-	return nil
 }
 
 func handlePrivateMessage(msg *proto.PrivateMessage, room *Room, user *User) error {
