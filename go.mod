@@ -2,8 +2,6 @@ module github.com/Cryptodog/go-cryptodog-newprotocol
 
 go 1.14
 
-replace github.com/Cryptodog/go-cryptodog => ./
-
 require (
 	github.com/Cryptodog/go-cryptodog v0.0.0-00010101000000-000000000000
 	github.com/awnumar/memcall v0.0.0-20191004114545-73db50fd9f80 // indirect
