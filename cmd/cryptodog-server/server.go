@@ -239,18 +239,16 @@ func handleJoinMessage(msg *proto.JoinMessage, user *User) (*Room, error) {
 	}
 	user.Name = msg.Name
 
-	if len(room.Users) > 1 {
-		// Collect room roster and send to current user.
-		var curUsers []string
-		for name := range room.Users {
-			if name != user.Name {
-				curUsers = append(curUsers, name)
-			}
+	// Collect room roster and send to current user.
+	curUsers := []string{}
+	for name := range room.Users {
+		if name != user.Name {
+			curUsers = append(curUsers, name)
 		}
-		sendMessage(user, &proto.RosterMessage{
-			Users: curUsers,
-		})
 	}
+	sendMessage(user, &proto.RosterMessage{
+		Users: curUsers,
+	})
 
 	// Alert room to new user.
 	broadcastMessage(room.Users, &proto.JoinMessage{
