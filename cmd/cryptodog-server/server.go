@@ -307,5 +307,5 @@ func handlePrivateMessage(msg *proto.PrivateMessage, room *Room, user *User) err
 
 func main() {
 	http.HandleFunc("/ws", ws)
-	log.Fatal(http.ListenAndServe("localhost:8009", nil))
+	log.Fatal(http.ListenAndServe(":8009", nil))
 }
