@@ -1,4 +1,4 @@
-module github.com/Cryptodog/go-cryptodog-newprotocol
+module github.com/Cryptodog/go-cryptodog
 
 go 1.14
 
