@@ -32,10 +32,6 @@ func ParseJID(s string) (JID, error) {
 		j.Host = spl[1]
 	}
 
-	if j.Node != "" {
-		j.Node = UnescapeLocal(j.Node)
-	}
-
 	return j, nil
 }
 
